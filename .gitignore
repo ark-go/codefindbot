@@ -1,4 +1,5 @@
 .git/
 bin/
-bin/
 .env
+bin/main/secret.json
+secret.json
