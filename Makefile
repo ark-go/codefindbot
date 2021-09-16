@@ -19,4 +19,4 @@ buildwin:
 
 run: build buildwin
 	$(info +Запуск)
-	APP_ID="ddddd" ./bin/main/codefindbot
+	./bin/main/codefindbot

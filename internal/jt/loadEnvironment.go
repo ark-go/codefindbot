@@ -8,10 +8,10 @@ package jt
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -41,6 +41,7 @@ import (
 
 // на вход подаем s указатель на структуру
 //	с экспортированными полями, имена полей должны соответствовать переменным
+//	поля могут быть  string,int
 //	поля будут заполняться, если будут найдены,
 //	сначала из файла secret.env
 //	а потом, поверх, из переменных окружения os
@@ -53,38 +54,46 @@ import (
 //	переменные окружения будут перекрывать значения из файла
 //
 //	переменные окружения не устанавливаются из файла !!!
-func LoadEnvironment(s interface{}) {
-	mapEnv := readFileSecret()
-	v := reflect.ValueOf(s) //  здесь указатель
-	v = reflect.Indirect(v) // получим значение
-	typeOfS := v.Type()
-	el := reflect.ValueOf(s).Elem() // возвращает значение которое содержит интерфейс
-	if el.Kind() == reflect.Struct {
-		for i := 0; i < v.NumField(); i++ {
-
-			f := el.FieldByName(typeOfS.Field(i).Name)
-			if f.IsValid() {
+func LoadEnvironment(s interface{}) { // ждем указатель на структуру
+	mapEnv := readFileSecret()       // сначала прочитаем из файла
+	el := reflect.ValueOf(s).Elem()  // возвращает значение которое содержит интерфейс (хочет указатель &)
+	if el.Kind() == reflect.Struct { // точно ли это структура?
+		for i := 0; i < el.NumField(); i++ { // NumField кол-во полей, пройдемся по ним. если не структура то паника
+			name := el.Type().Field(i).Name // имя поля
+			//f := el.Field(i)
+			f := el.FieldByName(name) // получим поле по имени
+			if f.IsValid() {          // если есть поле
 				// Значение можно изменить, только если оно
 				// адресуемо и не был получено
 				// с использованием неэкспортированных полей структуры. т.е. с большой буквы
-				if f.CanSet() {
+				if f.CanSet() { // можно ли изменить поле, поле должно быть экспортировано иначе false
 					// Изменить значение
-					if mapEnv != nil {
-						if val, ok := mapEnv[typeOfS.Field(i).Name]; ok {
-							f.SetString(val)
+					var valueStr string
+					if mapEnv != nil { // было ли что прочитано из файла
+						if val, ok := mapEnv[name]; ok {
+							//f.SetString(val) // заполним поле
+							valueStr = val
 						}
 					}
-					val, exists := os.LookupEnv(typeOfS.Field(i).Name) // environment
+					val, exists := os.LookupEnv(name) // environment получим переменную, если есть
 					if exists {
-						f.SetString(val)
+						//f.SetString(val) // заполним поле
+						valueStr = val
+					}
+
+					if f.Kind() == reflect.Int {
+						if val, err := strconv.Atoi(valueStr); err == nil {
+							//if !f.OverflowInt(int64(val)) { //  потом
+							f.SetInt(int64(val))
+							//}
+						}
+					} else if f.Kind() == reflect.String {
+						f.SetString(valueStr)
 					}
 				}
 			}
-
-			// log.Printf("Field: %s\tValue: %v\n", typeOfS.Field(i).Name, v.Field(i).Interface())
 		}
 	}
-
 }
 
 // читаем файл построчно
@@ -144,9 +153,8 @@ func PrintEnvironment(s interface{}) {
 			name := el.Type().Field(i).Name
 			f := el.FieldByName(name)
 			if f.IsValid() {
-				log.Printf("%s\t\t: %s", name, el.Field(i).Interface())
+				log.Printf("% 20s | %s", name, el.Field(i).Interface())
 			}
-			// log.Printf("Field: %s\tValue: %v\n", typeOfS.Field(i).Name, v.Field(i).Interface())
 		}
 	}
 }
@@ -163,11 +171,17 @@ func init(){
 	SecretEnv = &secretEnv{}
 }
 jt.LoadEnvironment(SecretEnv)
-//? Можно выводить информацию при некоторых условиях
+
+//?Можно выводить информацию при некоторых условиях
 if SecretEnv.IsSecret != "" {
 	log.Println("Загружены данные из secret.env")
 	if SecretEnv.IsSecret == "1" {
 		jt.PrintEnvironment(SecretEnv)
 	}
 }
+
+secret.env
+APP_ID=WSFSFASFASEF
+IsSecret=0
+
 */
